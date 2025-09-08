@@ -9,13 +9,6 @@
 # https://opensource.org/licenses/MIT.
 from __future__ import annotations
 
-import pytest
-
-pytest.importorskip(
-    "habitat_sim",
-    reason="Habitat Sim optional dependency not installed.",
-)
-
 import json
 import os
 import tempfile
@@ -25,7 +18,6 @@ from pathlib import Path
 import habitat_sim
 import numpy as np
 import quaternion as qt
-
 from tbp.monty.frameworks.actions.actions import (
     LookUp,
     MoveForward,
@@ -37,7 +29,8 @@ from tbp.monty.frameworks.actions.actions import (
     SetYaw,
     TurnLeft,
 )
-from tbp.monty.simulators.habitat import (
+
+from tbp.simulator_habitat import (
     PRIMITIVE_OBJECT_TYPES,
     HabitatSim,
     SingleSensorAgent,

@@ -36,30 +36,14 @@ dependencies = [
     'typing-extensions',
     'wandb', # imported via conda (conda-forge::wandb)
 ]
-description = 'Thousand Brains Project Monty'
+description = 'Thousand Brains Project Habitat Simulator'
 dynamic = ['version']
 license = { file = 'LICENSE' }
-name = 'tbp.monty'
+name = 'tbp.simulator_habitat'
 readme = 'README.md'
 requires-python = '>=3.8'
 
 [project.optional-dependencies]
-simulator_habitat = [
-    # HabitatSim is only installable via conda. These dependencies are listed here for
-    # documentation and consistency.
-    # NOTE: The version constraint is to prevent `uv` from failing trying to check all
-    # optional dependency sets are valid.
-    'habitat_sim;python_version=="3.9"', # imported via conda (aihabitat::habitat-sim)
-]
-simulator_mujoco = [
-    'mujoco'
-]
-analysis = [
-    'ipython',
-    'seaborn',
-    'vedo',
-    'trimesh',
-]
 build = [
     'build'
 ]
@@ -79,38 +63,12 @@ dev = [
     # Python linter and formatter
     'ruff==0.11.4',
 ]
-generate_api_docs_tool = [
-    'docutils>=0.17',
-    'sphinx',
-    'sphinx-autobuild',
-    'sphinx-autodoc-typehints',
-    'myst-parser',
-    'pydata_sphinx_theme',
-    'snowballstemmer<3'
-]
-github_readme_sync_tool = [
-    'requests',
-    'pyyaml',
-    'python-dotenv',
-    'colorama',
-    'markdown2',
-    'python-slugify',
-    'nh3'
-]
-print_version_tool = [
-    'semver'
-]
-real_robots = [
-    'gym',
-    'opencv-python',
-    'real_robots'
-]
 
 [project.urls]
-Homepage = 'https://thousandbrainsproject.org'
+Homepage = 'https://thousandbrains.org'
 Documentation = 'https://thousandbrainsproject.readme.io/docs'
-Repository = 'https://github.com/thousandbrainsproject.tbp.monty'
-Issues = 'https://github.com/thousandbrainsproject/tbp.monty/issues'
+Repository = 'https://github.com/thousandbrainsproject/tbp.simulator_habitat'
+Issues = 'https://github.com/thousandbrainsproject/tbp.simulator_habitat/issues'
 
 [tool.deptry]
 exclude= ['venv', '\.venv', '\.direnv', '\.git', 'setup\.py']
@@ -118,11 +76,9 @@ experimental_namespace_package = true # recognize tbp.monty as a namespace packa
 ignore = ['DEP002']
 known_first_party = [
     'attr', # transitive dependency bundled with habitat-sim
-    'benchmarks', # benchmark configurations and scripts
     'magnum', # transitive dependency bundled with habitat-sim
     'quaternion', # transitive add-on for numpy installed via conda (conda-forge::quaternion)
-    'tests',
-    'tools'
+    'tests'
 ]
 
 [tool.deptry.package_module_name_map]
@@ -134,7 +90,7 @@ ipython = 'IPython'
 minversion = '6.0'
 addopts = '-ra -n auto'
 testpaths = [
-    'tests/unit',
+    'tests',
 ]
 filterwarnings = [
     'ignore:.*:DeprecationWarning'
@@ -329,7 +285,7 @@ max-complexity = 18
 convention = "google"
 
 [tool.setuptools.dynamic]
-version = { attr = "tbp.monty.__version__" }
+version = { attr = "tbp.simulator_habitat.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -337,8 +293,4 @@ namespaces = true
 
 [tool.setuptools.package-data]
 # habitat-sim resources
-'tbp.monty.simulators.resources' = ['*.json', '*.yml', '*.txt']
-
-[tool.uv]
-# Extra index for PyTorch extensions
-find-links = ["https://data.pyg.org/whl/torch-1.11.0+cpu.html"]
+'tbp.simulator_habitat.resources' = ['*.json', '*.yml', '*.txt']
