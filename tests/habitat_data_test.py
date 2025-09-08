@@ -8,12 +8,6 @@
 # license that can be found in the LICENSE file or at
 # https://opensource.org/licenses/MIT.
 
-import pytest
-
-pytest.importorskip(
-    "habitat_sim",
-    reason="Habitat Sim optional dependency not installed.",
-)
 
 import unittest
 import unittest.mock as mock
@@ -32,8 +26,8 @@ from tbp.monty.frameworks.environments.embodied_data import (
 from tbp.monty.frameworks.environments.embodied_environment import ActionSpace
 from tbp.monty.frameworks.models.motor_policies import BasePolicy
 from tbp.monty.frameworks.models.motor_system import MotorSystem
-from tbp.monty.simulators.habitat import SingleSensorAgent
-from tbp.monty.simulators.habitat.environment import AgentConfig, HabitatEnvironment
+from tbp.simulator_habitat.agents import SingleSensorAgent
+from tbp.simulator_habitat.environment import AgentConfig, HabitatEnvironment
 
 DATASET_LEN = 10
 DEFAULT_ACTUATION_AMOUNT = 0.25

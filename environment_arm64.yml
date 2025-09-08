@@ -10,11 +10,11 @@
 # you open a new terminal, run:
 #     $ conda config --set auto_activate_base false
 # Finally, activate the environment with:
-#     $ conda activate tbp.monty
+#     $ conda activate tbp.simulator_habitat
 #     $ conda config --env --set subdir osx-64
 #
 # platform: osx-arm64
-name: tbp.monty
+name: tbp.simulator_habitat
 channels:
   - aihabitat
   - pytorch
