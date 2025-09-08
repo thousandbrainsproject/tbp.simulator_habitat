@@ -14,6 +14,7 @@ import unittest.mock as mock
 
 import magnum as mn
 import numpy as np
+
 from tbp.monty.frameworks.actions.action_samplers import (
     UniformlyDistributedSampler,
 )
@@ -25,7 +26,6 @@ from tbp.monty.frameworks.environments.embodied_data import (
 from tbp.monty.frameworks.environments.embodied_environment import ActionSpace
 from tbp.monty.frameworks.models.motor_policies import BasePolicy
 from tbp.monty.frameworks.models.motor_system import MotorSystem
-
 from tbp.simulator_habitat.agents import SingleSensorAgent
 from tbp.simulator_habitat.environment import AgentConfig, HabitatEnvironment
 
