@@ -18,6 +18,7 @@ from pathlib import Path
 import habitat_sim
 import numpy as np
 import quaternion as qt
+
 from tbp.monty.frameworks.actions.actions import (
     LookUp,
     MoveForward,
@@ -29,7 +30,6 @@ from tbp.monty.frameworks.actions.actions import (
     SetYaw,
     TurnLeft,
 )
-
 from tbp.simulator_habitat import (
     PRIMITIVE_OBJECT_TYPES,
     HabitatSim,
