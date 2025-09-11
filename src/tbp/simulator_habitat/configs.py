@@ -6,6 +6,8 @@
 # Use of this source code is governed by the MIT
 # license that can be found in the LICENSE file or at
 # https://opensource.org/licenses/MIT.
+from __future__ import annotations
+
 import os
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Mapping, Union
@@ -13,6 +15,7 @@ from typing import Callable, Dict, List, Mapping, Union
 from tbp.monty.frameworks.config_utils.make_dataset_configs import (
     FiveLMMountConfig,
     MultiLMMountConfig,
+    ObjectParams,
     PatchAndViewFinderMountConfig,
     PatchAndViewFinderMountLowResConfig,
     PatchAndViewFinderMultiObjectMountConfig,
@@ -27,6 +30,7 @@ from tbp.monty.frameworks.environment_utils.transforms import (
     DepthTo3DLocations,
     MissingToMaxDepth,
 )
+from tbp.monty.frameworks.environments.embodied_environment import VectorXYZ
 from tbp.simulator_habitat import MultiSensorAgent, SingleSensorAgent
 from tbp.simulator_habitat.environment import (
     AgentConfig,
@@ -74,8 +78,12 @@ class EnvInitArgs:
     """Args for :class:`HabitatEnvironment`."""
 
     agents: List[AgentConfig]
-    objects: List[ObjectConfig] = field(
-        default_factory=lambda: [ObjectConfig("coneSolid", position=(0.0, 1.5, -0.1))]
+    objects: list[ObjectConfig] = field(
+        default_factory=lambda: [
+            ObjectParams(
+                name="coneSolid", position=VectorXYZ((0.0, 1.5, -0.1))
+            ).as_dict()
+        ]
     )
     scene_id: Union[int, None] = field(default=None)
     seed: int = field(default=42)

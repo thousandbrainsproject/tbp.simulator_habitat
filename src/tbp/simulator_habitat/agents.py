@@ -7,17 +7,30 @@
 # Use of this source code is governed by the MIT
 # license that can be found in the LICENSE file or at
 # https://opensource.org/licenses/MIT..
+from __future__ import annotations
 
 import uuid
 from collections import defaultdict
-from typing import List, Tuple
+from typing import TYPE_CHECKING, List, Tuple
 
 import habitat_sim
 import numpy as np
 import quaternion as qt
 from habitat_sim.agent import ActionSpec, ActuationSpec, AgentConfiguration, AgentState
+from typing_extensions import Literal
 
-from .sensors import RGBDSensorConfig, SemanticSensorConfig, SensorConfig
+from tbp.monty.frameworks.models.abstract_monty_classes import (
+    AgentObservations,
+    SensorID,
+)
+from tbp.simulator_habitat.sensors import (
+    RGBDSensorConfig,
+    SemanticSensorConfig,
+    SensorConfig,
+)
+
+if TYPE_CHECKING:
+    from tbp.simulator_habitat.simulator import HabitatSim
 
 __all__ = [
     "HabitatAgent",
@@ -90,7 +103,7 @@ class HabitatAgent:
         agent_state.rotation = rotation
         simulator.initialize_agent(self.agent_id, agent_state)
 
-    def process_observations(self, agent_obs) -> dict:
+    def process_observations(self, agent_obs) -> AgentObservations:
         """Callback processing raw habitat agent observations to Monty-compatible ones.
 
         Args:
@@ -102,86 +115,94 @@ class HabitatAgent:
         # Habitat raw sensor observations are flat where the observation key is
         # composed of the `sensor_id.sensor_type`. The default agent starts by
         # grouping habitat raw observation by sensor_id and sensor_type.
-        obs_by_sensor = defaultdict(dict)
+        obs_by_sensor: AgentObservations = defaultdict(dict)
         for sensor_key, data in agent_obs.items():
             sensor_id, sensor_type = sensor_key.split(".")
-            obs_by_sensor[sensor_id][sensor_type] = data
+            obs_by_sensor[SensorID(sensor_id)][sensor_type] = data
 
         # Call each sensor to postprocess the observation data
         for sensor in self.sensors:
-            sensor_id = sensor.sensor_id
+            sensor_id = SensorID(sensor.sensor_id)
             sensor_obs = obs_by_sensor.get(sensor_id)
             if sensor_obs is not None:
                 obs_by_sensor[sensor_id] = sensor.process_observations(sensor_obs)
 
         return obs_by_sensor
 
+def action_space(
+    action_space_type: Literal["absolute_only", "distant_agent", "surface_agent"],
+    agent_id: str,
+    translation_step: float,
+    rotation_step: float,
+) -> dict[str, ActionSpec]:
+    """Generate an action space for a given action space type.
 
-class ActionSpaceMixin:
-    """An auxiliary function for agent classes to return their action space."""
+    Action space can be absolute, for distant-agent, or for surface-agent.
+    This method is only used in a couple of unit tests at the moment.
+    If not, use a default action space.
+    Action spaces are formatted as Tuple of lists, with elements:
+        0: action name
+        1: (initial) action amount
+        2: (initial) constraint
 
-    def get_action_space(self, spec: AgentConfiguration) -> AgentConfiguration:
-        """Creates and returns the agent's action space dictionary.
+    Args:
+        action_space_type: The type of action space to generate.
+        agent_id: The ID of the agent.
+        translation_step: The translation step.
+        rotation_step: The rotation step.
 
-        Action space can be absolute, for distant-agent, or for surface-agent
-        This method is only used in a couple of unit tests at the moment
-        If not, use a default action space.
-        action spaces are formatted as Tuple of lists, with elements:
-            0: action name
-            1: (initial) action amount
-            2: (initial) constraint
+    Returns:
+        The generated action space.
+    """
+    absolute_only_action_space: list[
+        tuple[str, float | list[float | qt.quaternion], float | None]
+    ] = [
+        ("set_yaw", 0.0, None),
+        ("set_agent_pitch", 0.0, None),
+        ("set_sensor_pitch", 0.0, None),
+        ("set_agent_pose", [[0.0, 0.0, 0.0], qt.one], None),
+        ("set_sensor_rotation", [[qt.one]], None),
+        ("set_sensor_pose", [[0.0, 0.0, 0.0], qt.one], None),
+    ]
+    distant_agent_action_space: list[
+        tuple[str, float | list[float | qt.quaternion], float | None]
+    ] = [
+        ("move_forward", translation_step, None),
+        ("turn_left", rotation_step, None),
+        ("turn_right", rotation_step, None),
+        ("look_up", rotation_step, 90.0),
+        ("look_down", rotation_step, 90.0),
+        ("set_agent_pose", [[0.0, 0.0, 0.0], qt.one], None),
+        ("set_sensor_rotation", [[qt.one]], None),
+    ]
+    surface_agent_action_space: list[
+        tuple[str, float | list[float | qt.quaternion], float | None]
+    ] = [
+        ("move_forward", translation_step, None),
+        ("move_tangentially", translation_step, None),
+        ("orient_horizontal", rotation_step, None),
+        ("orient_vertical", rotation_step, None),
+        ("set_agent_pose", [[0.0, 0.0, 0.0], qt.one], None),
+        ("set_sensor_rotation", [[qt.one]], None),
+    ]
+    if action_space_type == "absolute_only":
+        action_spec = absolute_only_action_space
+    elif action_space_type == "distant_agent":
+        action_spec = distant_agent_action_space
+    elif action_space_type == "surface_agent":
+        action_spec = surface_agent_action_space
 
-        Args:
-            spec: Agent parameters.
-
-        Returns:
-            Agent parameters updated with action space.
-        """
-        absolute_only_action_space = (
-            ["set_yaw", 0.0, None],
-            ["set_agent_pitch", 0.0, None],
-            ["set_sensor_pitch", 0.0, None],
-            ["set_agent_pose", [[0.0, 0.0, 0.0], qt.one], None],
-            ["set_sensor_rotation", [[qt.one]], None],
-            ["set_sensor_pose", [[0.0, 0.0, 0.0], qt.one], None],
-            # TODO triple check qt.one is correct format; expects numpy, so
-            # should be fine
+    action_space: dict[str, ActionSpec] = {}
+    for action in action_spec:
+        action_space[f"{agent_id}.{action[0]}"] = ActionSpec(
+            f"{action[0]}",
+            ActuationSpec(amount=action[1], constraint=action[2]),  # type: ignore[arg-type]
         )
-        distant_agent_action_space = (
-            ["move_forward", self.translation_step, None],
-            ["turn_left", self.rotation_step, None],
-            ["turn_right", self.rotation_step, None],
-            ["look_up", self.rotation_step, 90.0],
-            ["look_down", self.rotation_step, 90.0],
-            ["set_agent_pose", [[0.0, 0.0, 0.0], qt.one], None],
-            ["set_sensor_rotation", [[qt.one]], None],
-        )
-        surface_agent_action_space = (
-            ["move_forward", self.translation_step, None],
-            ["move_tangentially", self.translation_step, None],
-            ["orient_horizontal", self.rotation_step, None],
-            ["orient_vertical", self.rotation_step, None],
-            ["set_agent_pose", [[0.0, 0.0, 0.0], qt.one], None],
-            ["set_sensor_rotation", [[qt.one]], None],
-        )
-        if self.action_space_type == "absolute_only":
-            action_space = absolute_only_action_space
-        elif self.action_space_type == "distant_agent":
-            action_space = distant_agent_action_space
-        elif self.action_space_type == "surface_agent":
-            action_space = surface_agent_action_space
 
-        spec.action_space = {}
-        for action in action_space:
-            spec.action_space[f"{self.agent_id}.{action[0]}"] = ActionSpec(
-                f"{action[0]}",
-                ActuationSpec(amount=action[1], constraint=action[2]),
-            )
-
-        return spec
+    return action_space
 
 
-class MultiSensorAgent(HabitatAgent, ActionSpaceMixin):
+class MultiSensorAgent(HabitatAgent):
     """Minimal version of a HabitatAgent with multiple RGBD sensors mounted.
 
     The RGBD sensors are mounted to the same movable object (like two go-pros
@@ -252,7 +273,9 @@ class MultiSensorAgent(HabitatAgent, ActionSpaceMixin):
         height: float = 0.0,
         rotation_step: float = 0.0,
         translation_step: float = 0.0,
-        action_space_type: str = "distant_agent",
+        action_space_type: Literal[
+            "absolute_only", "distant_agent", "surface_agent"
+        ] = "distant_agent",
         resolutions: Tuple[Size] = ((16, 16),),
         positions: Tuple[Vector3] = ((0.0, 0.0, 0.0),),
         rotations: Tuple[Quaternion] = ((1.0, 0.0, 0.0, 0.0),),
@@ -265,7 +288,9 @@ class MultiSensorAgent(HabitatAgent, ActionSpaceMixin):
         self.sensor_ids = sensor_ids
         self.rotation_step = rotation_step
         self.translation_step = translation_step
-        self.action_space_type = action_space_type
+        self.action_space_type: Literal[
+            "absolute_only", "distant_agent", "surface_agent"
+        ] = action_space_type
         self.resolutions = resolutions
         self.positions = positions
         self.rotations = rotations
@@ -308,10 +333,15 @@ class MultiSensorAgent(HabitatAgent, ActionSpaceMixin):
 
     def get_spec(self):
         spec = super().get_spec()
-        spec = self.get_action_space(spec)
+        spec.action_space = action_space(
+            self.action_space_type,
+            self.agent_id,
+            self.translation_step,
+            self.rotation_step,
+        )
         return spec
 
-    def initialize(self, simulator):
+    def initialize(self, simulator: HabitatSim):
         """Initialize agent runtime state.
 
         This method must be called by :class:`.HabitatSim` to update the agent
@@ -336,7 +366,7 @@ class MultiSensorAgent(HabitatAgent, ActionSpaceMixin):
                 camera.zoom(zoom)
 
 
-class SingleSensorAgent(HabitatAgent, ActionSpaceMixin):
+class SingleSensorAgent(HabitatAgent):
     """Minimal version of a HabitatAgent.
 
     This is the special case of :class:`MultiSensorAgent` when there is at most 1
@@ -357,8 +387,9 @@ class SingleSensorAgent(HabitatAgent, ActionSpaceMixin):
         semantic: bool = False,
         rotation_step: float = 0.0,
         translation_step: float = 0.0,
-        action_space: Tuple = None,
-        action_space_type: str = "distant_agent",
+        action_space_type: Literal[
+            "absolute_only", "distant_agent", "surface_agent"
+        ] = "distant_agent",
     ):
         """Initialize agent runtime state.
 
@@ -376,8 +407,9 @@ class SingleSensorAgent(HabitatAgent, ActionSpaceMixin):
         self.semantic = semantic
         self.rotation_step = rotation_step
         self.translation_step = translation_step
-        self.action_space = action_space
-        self.action_space_type = action_space_type
+        self.action_space_type: Literal[
+            "absolute_only", "distant_agent", "surface_agent"
+        ] = action_space_type
 
         # Add RGBD Camera
         effective_sensor_position = (
@@ -407,18 +439,23 @@ class SingleSensorAgent(HabitatAgent, ActionSpaceMixin):
 
     def get_spec(self):
         spec = super().get_spec()
-        spec = self.get_action_space(spec)
+        spec.action_space = action_space(
+            self.action_space_type,
+            self.agent_id,
+            self.translation_step,
+            self.rotation_step,
+        )
         return spec
 
-    def initialize(self, simulator):
+    def initialize(self, simulator: HabitatSim):
         """Initialize agent runtime state.
 
-        This method must be called by :class:`.HabitatSim` to update the agent
+        This method must be called by :class:`HabitatSim` to update the agent
         and sensors runtime instance. This is necessary because some of the
         configuration attributes requires access to the instanciated scene node.
 
         Args:
-            simulator: Instantiated :class:`.HabitatSim` instance
+            simulator: Instantiated :class:`HabitatSim` instance
         """
         super().initialize(simulator)
 
