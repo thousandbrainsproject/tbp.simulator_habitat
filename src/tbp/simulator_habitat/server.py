@@ -10,6 +10,10 @@ from grpc_reflection.v1alpha import reflection
 
 import tbp.simulator.protocol.v1.protocol_pb2 as protocol_pb2
 import tbp.simulator.protocol.v1.protocol_pb2_grpc as protocol_pb2_grpc
+from tbp.monty.frameworks.environments.embodied_environment import (
+    QuaternionWXYZ,
+    VectorXYZ,
+)
 from tbp.simulator_habitat.agents import SingleSensorAgent
 from tbp.simulator_habitat.simulator import HabitatSim
 
@@ -17,7 +21,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 class SimulatorServiceServicer(protocol_pb2_grpc.SimulatorServiceServicer):
     def __init__(self, habitat_sim: HabitatSim):
-        logger.info("Initializing simulator service")
+        logger.info("SimulatorServiceServicer initialized")
         self.habitat_sim = habitat_sim
 
     def RemoveAllObjects(self, request, context):  # noqa: N802
@@ -28,13 +32,35 @@ class SimulatorServiceServicer(protocol_pb2_grpc.SimulatorServiceServicer):
     def AddObject(self, request, context):  # noqa: N802
         logger.info("Adding object")
         logger.info(request)
+        position = VectorXYZ(
+            (request.position.x, request.position.y, request.position.z)
+        )
+        rotation = QuaternionWXYZ(
+            (
+                request.rotation.w,
+                request.rotation.x,
+                request.rotation.y,
+                request.rotation.z,
+            )
+        )
+        scale = VectorXYZ((request.scale.x, request.scale.y, request.scale.z))
+        logger.info(request.has_semantic_id)
+        logger.info(request.has_primary_target_object)
+        if request.has_semantic_id:
+            semantic_id = request.semantic_id
+        else:
+            semantic_id = None
+        if request.has_primary_target_object:
+            primary_target_object = request.primary_target_object
+        else:
+            primary_target_object = None
         object_id, semantic_id = self.habitat_sim.add_object(
             request.name,
-            request.position,
-            request.rotation,
-            request.scale,
-            request.semantic_id,
-            request.primary_target_object,
+            position=position,
+            rotation=rotation,
+            scale=scale,
+            semantic_id=semantic_id,
+            primary_target_object=primary_target_object,
         )
         return protocol_pb2.AddObjectResponse(
             object_id=object_id,
