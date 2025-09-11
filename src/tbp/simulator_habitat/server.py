@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from tbp.monty.frameworks.run_env import setup_env
+
+setup_env()
+
+
 import logging
 import signal
 import sys
@@ -10,15 +15,24 @@ from grpc_reflection.v1alpha import reflection
 
 import tbp.simulator.protocol.v1.protocol_pb2 as protocol_pb2
 import tbp.simulator.protocol.v1.protocol_pb2_grpc as protocol_pb2_grpc
+from tbp.monty.frameworks.config_utils.make_dataset_configs import (
+    PatchAndViewFinderMultiObjectMountConfig,
+)
 from tbp.monty.frameworks.environments.embodied_environment import (
     QuaternionWXYZ,
     VectorXYZ,
 )
-from tbp.simulator_habitat.agents import SingleSensorAgent
+from tbp.simulator_habitat.agents import (
+    MultiSensorAgent,
+    SingleSensorAgent,
+)
+from tbp.simulator_habitat.environment import AgentConfig
 from tbp.simulator_habitat.simulator import HabitatSim
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
 class SimulatorServiceServicer(protocol_pb2_grpc.SimulatorServiceServicer):
     def __init__(self, habitat_sim: HabitatSim):
         logger.info("SimulatorServiceServicer initialized")
@@ -44,16 +58,15 @@ class SimulatorServiceServicer(protocol_pb2_grpc.SimulatorServiceServicer):
             )
         )
         scale = VectorXYZ((request.scale.x, request.scale.y, request.scale.z))
-        logger.info(request.has_semantic_id)
-        logger.info(request.has_primary_target_object)
-        if request.has_semantic_id:
+        if request.HasField("semantic_id"):
             semantic_id = request.semantic_id
         else:
             semantic_id = None
-        if request.has_primary_target_object:
+        if request.HasField("primary_target_object"):
             primary_target_object = request.primary_target_object
         else:
             primary_target_object = None
+
         object_id, semantic_id = self.habitat_sim.add_object(
             request.name,
             position=position,
@@ -106,7 +119,7 @@ def signal_handler(habitat_sim: HabitatSim):
 
 def create_habitat_sim() -> HabitatSim:
     logger.info("Creating habitat sim")
-    agents = create_agents(num_agents=1, resolution=(5, 5))
+    agents = [MultiSensorAgent(**PatchAndViewFinderMultiObjectMountConfig().__dict__)]
     habitat_sim = HabitatSim(agents=agents)
     logger.info("Habitat sim created")
     return habitat_sim
@@ -153,5 +166,5 @@ def create_agents(
 if __name__ == "__main__":
     logger.info("Starting server")
     habitat_sim = create_habitat_sim()
-    signal.signal(signal.SIGINT, signal_handler(habitat_sim))
+    # signal.signal(signal.SIGINT, signal_handler(habitat_sim))
     serve(habitat_sim)
