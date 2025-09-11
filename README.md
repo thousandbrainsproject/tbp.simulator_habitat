@@ -10,3 +10,5 @@ python -m grpc_tools.protoc -I/Users/tslominski/tbp/prototype.simulator/proto --
 # grpcurl commands debug
 
 grpcurl -plaintext -d '{"name":"cubeSolid", "position": {"x": 0, "y": 0, "z": 0}, "rotation": {"w":1, "x": 0, "y": 0, "z": 0}, "scale": {"x": 1, "y": 1, "z": 1} }' localhost:50051 tbp.simulator.protocol.v1.SimulatorService/AddObject
+
+grpcurl -plaintext localhost:50051 tbp.simulator.protocol.v1.SimulatorService/Reset

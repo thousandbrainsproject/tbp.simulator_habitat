@@ -150,9 +150,10 @@ class HabitatSim(HabitatActuator):
 
             agent_configs.append(config)
 
-        self._sim = habitat_sim.Simulator(
+        self._sim: habitat_sim.Simulator = habitat_sim.Simulator(
             habitat_sim.Configuration(backend_config, agent_configs)
         )
+        self._running = True
 
         # Load objects from data_path
         if data_path is not None:
@@ -186,7 +187,7 @@ class HabitatSim(HabitatActuator):
             else:
                 # The dataset was downloaded some other way.
                 # The data path must be the path to the object config files
-                objects_data_path = [absolute_data_path]
+                objects_data_path = {absolute_data_path}
 
             # Add each object data path to the simulator
             objects_added = False
@@ -569,7 +570,7 @@ class HabitatSim(HabitatActuator):
         Returns:
             All observations.
         """
-        agent_indices = range(len(self._agents))
+        agent_indices = list(range(len(self._agents)))
         obs = self._sim.get_sensor_observations(agent_ids=agent_indices)
         obs = self.process_observations(obs)
         return obs
@@ -623,17 +624,16 @@ class HabitatSim(HabitatActuator):
 
     def reset(self) -> tuple[Observations, ProprioceptiveState]:
         # All agents managed by this simulator
-        agent_indices = range(len(self._agents))
+        agent_indices = list(range(len(self._agents)))
         obs = self._sim.reset(agent_ids=agent_indices)
         obs = self.process_observations(obs)
         return obs, self.state
 
     def close(self) -> None:
         """Close simulator and release resources."""
-        sim = getattr(self, "_sim", None)
-        if sim is not None:
-            sim.close()
-            self._sim = None
+        if self._running:
+            self._sim.close()
+            self._running = False
 
     def __enter__(self):
         return self

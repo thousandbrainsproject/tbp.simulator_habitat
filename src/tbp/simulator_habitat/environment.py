@@ -106,7 +106,7 @@ class HabitatEnvironment(EmbodiedEnvironment):
             cfg_dict = asdict(config) if is_dataclass(config) else config
             agent_type = cfg_dict["agent_type"]
             args = cfg_dict["agent_args"]
-            if is_dataclass(args):
+            if is_dataclass_instance(args):
                 args = asdict(args)
             agent = agent_type(**args)
             self._agents.append(agent)
