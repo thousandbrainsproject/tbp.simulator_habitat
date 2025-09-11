@@ -47,7 +47,7 @@ dependencies:
   - pyg::pytorch-sparse=0.6.15
   - pytorch::pytorch=1.11.0
   - pytorch::torchvision
-  - thousandbrainsproject::tbp.monty==0.11.0
+  # - thousandbrainsproject::tbp.monty==0.11.0
 
   - pip
   - pip:
