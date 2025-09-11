@@ -27,9 +27,18 @@ class SimulatorServiceServicer(protocol_pb2_grpc.SimulatorServiceServicer):
 
     def AddObject(self, request, context):  # noqa: N802
         logger.info("Adding object")
+        logger.info(request)
+        object_id, semantic_id = self.habitat_sim.add_object(
+            request.name,
+            request.position,
+            request.rotation,
+            request.scale,
+            request.semantic_id,
+            request.primary_target_object,
+        )
         return protocol_pb2.AddObjectResponse(
-            object_id=1,
-            semantic_id=1,
+            object_id=object_id,
+            semantic_id=semantic_id,
         )
 
     def Step(self, request, context):  # noqa: N802
