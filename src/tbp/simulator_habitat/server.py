@@ -10,10 +10,14 @@ from __future__ import annotations
 
 import inspect
 import logging
+import os
 from concurrent import futures
+from dataclasses import asdict, dataclass
 from queue import Queue
 
 import grpc
+import numpy as np
+import quaternion as qt
 from grpc_reflection.v1alpha import reflection
 
 import tbp.simulator.protocol.v1.protocol_pb2 as protocol_pb2
@@ -39,7 +43,7 @@ from tbp.monty.frameworks.actions.actions import (
     TurnRight,
 )
 from tbp.monty.frameworks.config_utils.make_dataset_configs import (
-    PatchAndViewFinderMultiObjectMountConfig,
+    PatchAndViewFinderMountConfig,
 )
 from tbp.monty.frameworks.environments.embodied_environment import (
     QuaternionWXYZ,
@@ -106,12 +110,12 @@ class SimulatorServiceServicer(protocol_pb2_grpc.SimulatorServiceServicer):
         logger.info("remove_all_objects: removing all objects")
         self.to_habitat.put({"op": "remove_all_objects"})
         self.from_habitat.get()
-        logger.info("remove_all_objects: serializing")
+        logger.debug("remove_all_objects: serializing")
         return protocol_pb2.RemoveAllObjectsResponse()
 
     def AddObject(self, request, context):  # noqa: N802
         logger.info("add_object: adding object")
-        logger.info(request)
+        logger.debug(request)
         position = VectorXYZ(
             (request.position.x, request.position.y, request.position.z)
         )
@@ -144,15 +148,15 @@ class SimulatorServiceServicer(protocol_pb2_grpc.SimulatorServiceServicer):
 
         response = self.from_habitat.get()
 
-        logger.info("add_object: serializing")
+        logger.debug("add_object: serializing")
         return protocol_pb2.AddObjectResponse(
             object_id=response["object_id"],
             semantic_id=response["semantic_id"],
         )
 
     def Step(self, request, context):  # noqa: N802
-        logger.info("step: stepping")
-        logger.info(request)
+        logger.debug("step: stepping")
+        logger.debug(request)
         action_type = request.WhichOneof("action")
         if action_type == "look_down":
             logger.info("step: looking down")
@@ -220,13 +224,11 @@ class SimulatorServiceServicer(protocol_pb2_grpc.SimulatorServiceServicer):
                     set_agent_pose.location.z,
                 )
             )
-            rotation = QuaternionWXYZ(
-                (
-                    set_agent_pose.rotation.w,
-                    set_agent_pose.rotation.x,
-                    set_agent_pose.rotation.y,
-                    set_agent_pose.rotation.z,
-                )
+            rotation = np.quaternion(
+                set_agent_pose.rotation.w,
+                set_agent_pose.rotation.x,
+                set_agent_pose.rotation.y,
+                set_agent_pose.rotation.z,
             )
             action = SetAgentPose(
                 agent_id=set_agent_pose.agent_id,
@@ -250,13 +252,11 @@ class SimulatorServiceServicer(protocol_pb2_grpc.SimulatorServiceServicer):
                     set_sensor_pose.location.z,
                 )
             )
-            rotation = QuaternionWXYZ(
-                (
-                    set_sensor_pose.rotation.w,
-                    set_sensor_pose.rotation.x,
-                    set_sensor_pose.rotation.y,
-                    set_sensor_pose.rotation.z,
-                )
+            rotation = np.quaternion(
+                set_sensor_pose.rotation.w,
+                set_sensor_pose.rotation.x,
+                set_sensor_pose.rotation.y,
+                set_sensor_pose.rotation.z,
             )
             action = SetSensorPose(
                 agent_id=set_sensor_pose.agent_id,
@@ -266,13 +266,11 @@ class SimulatorServiceServicer(protocol_pb2_grpc.SimulatorServiceServicer):
         elif action_type == "set_sensor_rotation":
             logger.info("step: setting sensor rotation")
             set_sensor_rotation = request.set_sensor_rotation
-            rotation = QuaternionWXYZ(
-                (
-                    set_sensor_rotation.rotation.w,
-                    set_sensor_rotation.rotation.x,
-                    set_sensor_rotation.rotation.y,
-                    set_sensor_rotation.rotation.z,
-                )
+            rotation = np.quaternion(
+                set_sensor_rotation.rotation.w,
+                set_sensor_rotation.rotation.x,
+                set_sensor_rotation.rotation.y,
+                set_sensor_rotation.rotation.z,
             )
             action = SetSensorRotation(
                 agent_id=set_sensor_rotation.agent_id,
@@ -307,7 +305,7 @@ class SimulatorServiceServicer(protocol_pb2_grpc.SimulatorServiceServicer):
         response = self.from_habitat.get()
         observations = response["observations"]
         proprioceptive_state = response["proprioceptive_state"]
-        logger.info("step: serializing")
+        logger.debug("step: serializing")
 
         pb_obs, pb_state = serialize_obs_and_state(observations, proprioceptive_state)
 
@@ -323,7 +321,7 @@ class SimulatorServiceServicer(protocol_pb2_grpc.SimulatorServiceServicer):
         response = self.from_habitat.get()
         observations = response["observations"]
         proprioceptive_state = response["proprioceptive_state"]
-        logger.info("reset: serializing")
+        logger.debug("reset: serializing")
 
         pb_obs, pb_state = serialize_obs_and_state(observations, proprioceptive_state)
 
@@ -352,16 +350,27 @@ def serve(to_habitat: Queue, from_habitat: Queue):
     server.start()
     return server
 
+@dataclass
+class HabitatSimConfig:
+    agents: list[HabitatAgent]
+    data_path: str
+    scene_id: str | None = None
+    seed: int = 42
+
+
+def base_config_10distinctobj_dist_agent() -> HabitatSimConfig:
+    return HabitatSimConfig(
+        agents=[MultiSensorAgent(**PatchAndViewFinderMountConfig().__dict__)],
+        data_path=os.path.join(os.environ["MONTY_DATA"], "habitat/objects/ycb"),
+    )
 
 def create_habitat_sim(to_habitat: Queue, from_habitat: Queue) -> HabitatSim:
     logger.info("Creating habitat sim")
-    agents: list[HabitatAgent] = [
-        MultiSensorAgent(**PatchAndViewFinderMultiObjectMountConfig().__dict__)
-    ]
-    habitat_sim = HabitatSim(agents=agents)
+    habitat_sim_config = base_config_10distinctobj_dist_agent()
+    habitat_sim = HabitatSim(**asdict(habitat_sim_config))
     logger.info("Habitat sim created")
     while True:
-        logger.info("Waiting for message")
+        logger.debug("Waiting for message")
         msg = to_habitat.get()
         if msg["op"] == "remove_all_objects":
             habitat_sim.remove_all_objects()
