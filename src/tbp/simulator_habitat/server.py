@@ -22,6 +22,22 @@ from tbp.monty.frameworks.run_env import setup_env
 
 setup_env()
 
+from tbp.monty.frameworks.actions.actions import (
+    LookDown,
+    LookUp,
+    MoveForward,
+    MoveTangentially,
+    OrientHorizontal,
+    OrientVertical,
+    SetAgentPitch,
+    SetAgentPose,
+    SetSensorPitch,
+    SetSensorPose,
+    SetSensorRotation,
+    SetYaw,
+    TurnLeft,
+    TurnRight,
+)
 from tbp.monty.frameworks.config_utils.make_dataset_configs import (
     PatchAndViewFinderMultiObjectMountConfig,
 )
@@ -42,6 +58,43 @@ logger = logging.getLogger(__name__)
 logger.info(protocol_pb2.__file__)
 logger.info(inspect.getsourcefile(protocol_pb2))
 
+def serialize_obs_and_state(observations, proprioceptive_state):
+    pb_obs = protocol_pb2.Observations()
+    for agent_id, agent_obs in observations.items():
+        pb_agent_obs = pb_obs.agent_observations.add(agent_id=agent_id)
+        for sensor_id, sensor_obs in agent_obs.items():
+            pb_sensor_obs = pb_agent_obs.sensor_observations.add(sensor_id=sensor_id)
+            for modality, data in sensor_obs.items():
+                if modality == "raw":
+                    pb_sensor_obs.raw = data.tobytes()
+                elif modality == "rgba":
+                    pb_sensor_obs.rgba = data.tobytes()
+                elif modality == "depth":
+                    pb_sensor_obs.depth = data.tobytes()
+                elif modality == "semantic":
+                    pb_sensor_obs.semantic = data.tobytes()
+                elif modality == "semantic_3d":
+                    pb_sensor_obs.semantic_3d = data.tobytes()
+                elif modality == "sensor_frame_data":
+                    pb_sensor_obs.sensor_frame_data = data.tobytes()
+                elif modality == "world_camera":
+                    pb_sensor_obs.world_camera = data.tobytes()
+                elif modality == "pixel_loc":
+                    pb_sensor_obs.pixel_loc = data.tobytes()
+
+    pb_state = protocol_pb2.ProprioceptiveState()
+    for agent_id, agent_state in proprioceptive_state.items():
+        pb_agent_state = pb_state.agent_states.add(agent_id=agent_id)
+        for sensor_id, sensor_state in agent_state.sensors.items():
+            pb_sensor_state = pb_agent_state.sensor_states.add(sensor_id=sensor_id)
+            pb_sensor_state.position.x = sensor_state.position.x
+            pb_sensor_state.position.y = sensor_state.position.y
+            pb_sensor_state.position.z = sensor_state.position.z
+            pb_sensor_state.rotation.w = sensor_state.rotation.w
+            pb_sensor_state.rotation.x = sensor_state.rotation.x
+            pb_sensor_state.rotation.y = sensor_state.rotation.y
+            pb_sensor_state.rotation.z = sensor_state.rotation.z
+    return pb_obs, pb_state
 
 class SimulatorServiceServicer(protocol_pb2_grpc.SimulatorServiceServicer):
     def __init__(self, to_habitat: Queue, from_habitat: Queue):
@@ -98,8 +151,170 @@ class SimulatorServiceServicer(protocol_pb2_grpc.SimulatorServiceServicer):
         )
 
     def Step(self, request, context):  # noqa: N802
-        logger.info("step: stepping TODO")
-        return protocol_pb2.StepResponse()
+        logger.info("step: stepping")
+        logger.info(request)
+        action_type = request.WhichOneof("action")
+        if action_type == "look_down":
+            logger.info("step: looking down")
+            look_down = request.look_down
+            action = LookDown(
+                agent_id=look_down.agent_id,
+                rotation_degrees=look_down.rotation_degrees,
+                constraint_degrees=look_down.constraint_degrees,
+            )
+        elif action_type == "look_up":
+            logger.info("step: looking up")
+            look_up = request.look_up
+            action = LookUp(
+                agent_id=look_up.agent_id,
+                rotation_degrees=look_up.rotation_degrees,
+                constraint_degrees=look_up.constraint_degrees,
+            )
+        elif action_type == "move_forward":
+            logger.info("step: moving forward")
+            move_forward = request.move_forward
+            action = MoveForward(
+                agent_id=move_forward.agent_id,
+                distance=move_forward.distance,
+            )
+        elif action_type == "move_tangentially":
+            logger.info("step: moving tangentially")
+            move_tangentially = request.move_tangentially
+            action = MoveTangentially(
+                agent_id=move_tangentially.agent_id,
+                distance=move_tangentially.distance,
+                direction=move_tangentially.direction,
+            )
+        elif action_type == "orient_horizontal":
+            logger.info("step: orienting horizontally")
+            orient_horizontal = request.orient_horizontal
+            action = OrientHorizontal(
+                agent_id=orient_horizontal.agent_id,
+                rotation_degrees=orient_horizontal.rotation_degrees,
+                left_distance=orient_horizontal.left_distance,
+                forward_distance=orient_horizontal.forward_distance,
+            )
+        elif action_type == "orient_vertical":
+            logger.info("step: orienting vertically")
+            orient_vertical = request.orient_vertical
+            action = OrientVertical(
+                agent_id=orient_vertical.agent_id,
+                rotation_degrees=orient_vertical.rotation_degrees,
+                down_distance=orient_vertical.down_distance,
+                forward_distance=orient_vertical.forward_distance,
+            )
+        elif action_type == "set_agent_pitch":
+            logger.info("step: setting agent pitch")
+            set_agent_pitch = request.set_agent_pitch
+            action = SetAgentPitch(
+                agent_id=set_agent_pitch.agent_id,
+                pitch_degrees=set_agent_pitch.pitch_degrees,
+            )
+        elif action_type == "set_agent_pose":
+            logger.info("step: setting agent pose")
+            set_agent_pose = request.set_agent_pose
+            location = VectorXYZ(
+                (
+                    set_agent_pose.location.x,
+                    set_agent_pose.location.y,
+                    set_agent_pose.location.z,
+                )
+            )
+            rotation = QuaternionWXYZ(
+                (
+                    set_agent_pose.rotation.w,
+                    set_agent_pose.rotation.x,
+                    set_agent_pose.rotation.y,
+                    set_agent_pose.rotation.z,
+                )
+            )
+            action = SetAgentPose(
+                agent_id=set_agent_pose.agent_id,
+                location=location,
+                rotation_quat=rotation,
+            )
+        elif action_type == "set_sensor_pitch":
+            logger.info("step: setting sensor pitch")
+            set_sensor_pitch = request.set_sensor_pitch
+            action = SetSensorPitch(
+                agent_id=set_sensor_pitch.agent_id,
+                pitch_degrees=set_sensor_pitch.pitch_degrees,
+            )
+        elif action_type == "set_sensor_pose":
+            logger.info("step: setting sensor pose")
+            set_sensor_pose = request.set_sensor_pose
+            location = VectorXYZ(
+                (
+                    set_sensor_pose.location.x,
+                    set_sensor_pose.location.y,
+                    set_sensor_pose.location.z,
+                )
+            )
+            rotation = QuaternionWXYZ(
+                (
+                    set_sensor_pose.rotation.w,
+                    set_sensor_pose.rotation.x,
+                    set_sensor_pose.rotation.y,
+                    set_sensor_pose.rotation.z,
+                )
+            )
+            action = SetSensorPose(
+                agent_id=set_sensor_pose.agent_id,
+                location=location,
+                rotation_quat=rotation,
+            )
+        elif action_type == "set_sensor_rotation":
+            logger.info("step: setting sensor rotation")
+            set_sensor_rotation = request.set_sensor_rotation
+            rotation = QuaternionWXYZ(
+                (
+                    set_sensor_rotation.rotation.w,
+                    set_sensor_rotation.rotation.x,
+                    set_sensor_rotation.rotation.y,
+                    set_sensor_rotation.rotation.z,
+                )
+            )
+            action = SetSensorRotation(
+                agent_id=set_sensor_rotation.agent_id,
+                rotation_quat=rotation,
+            )
+        elif action_type == "set_yaw":
+            logger.info("step: setting yaw")
+            set_yaw = request.set_yaw
+            action = SetYaw(
+                agent_id=set_yaw.agent_id,
+                rotation_degrees=set_yaw.rotation_degrees,
+            )
+        elif action_type == "turn_left":
+            logger.info("step: turning left")
+            turn_left = request.turn_left
+            action = TurnLeft(
+                agent_id=turn_left.agent_id,
+                rotation_degrees=turn_left.rotation_degrees,
+            )
+        elif action_type == "turn_right":
+            logger.info("step: turning right")
+            turn_right = request.turn_right
+            action = TurnRight(
+                agent_id=turn_right.agent_id,
+                rotation_degrees=turn_right.rotation_degrees,
+            )
+        else:
+            logger.error(f"step: unknown action: {action_type}")
+            return protocol_pb2.StepResponse()
+        self.to_habitat.put({"op": "step", "action": action})
+
+        response = self.from_habitat.get()
+        observations = response["observations"]
+        proprioceptive_state = response["proprioceptive_state"]
+        logger.info("step: serializing")
+
+        pb_obs, pb_state = serialize_obs_and_state(observations, proprioceptive_state)
+
+        return protocol_pb2.StepResponse(
+            observations=pb_obs,
+            proprioceptive_state=pb_state,
+        )
 
     def Reset(self, request, context):  # noqa: N802
         logger.info("reset: resetting")
@@ -110,43 +325,7 @@ class SimulatorServiceServicer(protocol_pb2_grpc.SimulatorServiceServicer):
         proprioceptive_state = response["proprioceptive_state"]
         logger.info("reset: serializing")
 
-        pb_obs = protocol_pb2.Observations()
-        for agent_id, agent_obs in observations.items():
-            pb_agent_obs = pb_obs.agent_observations.add(agent_id=agent_id)
-            for sensor_id, sensor_obs in agent_obs.items():
-                pb_sensor_obs = pb_agent_obs.sensor_observations.add(
-                    sensor_id=sensor_id
-                )
-                for modality, data in sensor_obs.items():
-                    if modality == "raw":
-                        pb_sensor_obs.raw = data.tobytes()
-                    elif modality == "rgba":
-                        pb_sensor_obs.rgba = data.tobytes()
-                    elif modality == "depth":
-                        pb_sensor_obs.depth = data.tobytes()
-                    elif modality == "semantic":
-                        pb_sensor_obs.semantic = data.tobytes()
-                    elif modality == "semantic_3d":
-                        pb_sensor_obs.semantic_3d = data.tobytes()
-                    elif modality == "sensor_frame_data":
-                        pb_sensor_obs.sensor_frame_data = data.tobytes()
-                    elif modality == "world_camera":
-                        pb_sensor_obs.world_camera = data.tobytes()
-                    elif modality == "pixel_loc":
-                        pb_sensor_obs.pixel_loc = data.tobytes()
-
-        pb_state = protocol_pb2.ProprioceptiveState()
-        for agent_id, agent_state in proprioceptive_state.items():
-            pb_agent_state = pb_state.agent_states.add(agent_id=agent_id)
-            for sensor_id, sensor_state in agent_state.sensors.items():
-                pb_sensor_state = pb_agent_state.sensor_states.add(sensor_id=sensor_id)
-                pb_sensor_state.position.x = sensor_state.position.x
-                pb_sensor_state.position.y = sensor_state.position.y
-                pb_sensor_state.position.z = sensor_state.position.z
-                pb_sensor_state.rotation.w = sensor_state.rotation.w
-                pb_sensor_state.rotation.x = sensor_state.rotation.x
-                pb_sensor_state.rotation.y = sensor_state.rotation.y
-                pb_sensor_state.rotation.z = sensor_state.rotation.z
+        pb_obs, pb_state = serialize_obs_and_state(observations, proprioceptive_state)
 
         return protocol_pb2.ResetResponse(
             observations=pb_obs,
